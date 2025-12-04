@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Scheduler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .fade-enter-active, .fade-leave-active { transition: opacity 0.5s; }
+        .fade-enter-from, .fade-leave-to { opacity: 0; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+    <div id="app" class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-white shadow-sm sticky top-0 z-10">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-indigo-600 p-2 rounded-lg">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                    </div>
+                    <h1 class="text-xl font-bold text-gray-900">Vehicle Scheduler</h1>
+                </div>
+                <button @click="loadExample" class="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors">
+                    Load Example Data
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
+            
+            <!-- Left Column: Inputs -->
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- Trips Input -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                        <h2 class="font-semibold text-gray-700">Trips</h2>
+                        <button @click="addTrip" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            Add Trip
+                        </button>
+                    </div>
+                    <div class="p-4 max-h-[400px] overflow-y-auto space-y-3">
+                        <div v-if="trips.length === 0" class="text-center py-8 text-gray-400 text-sm">
+                            No trips added. Add one or load example.
+                        </div>
+                        <div v-for="(trip, index) in trips" :key="trip.id" class="flex flex-col sm:flex-row sm:items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100 group hover:border-indigo-200 transition-colors">
+                            <div class="flex items-center gap-2 flex-grow">
+                                <span class="text-xs font-mono text-gray-400 w-4">#{{ trip.id }}</span>
+                                <input v-model="trip.dep_term" placeholder="Dep" class="w-16 px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-indigo-500 outline-none uppercase text-center" maxlength="3">
+                                <input type="time" v-model="trip.dep_time_str" class="w-24 px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-indigo-500 outline-none">
+                                <span class="text-gray-400">→</span>
+                                <input v-model="trip.arr_term" placeholder="Arr" class="w-16 px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-indigo-500 outline-none uppercase text-center" maxlength="3">
+                                <input type="time" v-model="trip.arr_time_str" class="w-24 px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-indigo-500 outline-none">
+                            </div>
+                            <button @click="removeTrip(index)" class="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deadhead Matrix -->
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+                        <h2 class="font-semibold text-gray-700">Deadhead Times (minutes)</h2>
+                    </div>
+                    <div class="p-6 overflow-x-auto">
+                        <table class="w-full text-sm text-center">
+                            <thead>
+                                <tr>
+                                    <th class="p-2 text-gray-400 font-normal italic">From \ To</th>
+                                    <th v-for="term in uniqueTerminals" :key="term" class="p-2 font-semibold text-gray-700 uppercase">{{ term }}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="from in uniqueTerminals" :key="from">
+                                    <td class="p-2 font-semibold text-gray-700 uppercase">{{ from }}</td>
+                                    <td v-for="to in uniqueTerminals" :key="to" class="p-1">
+                                        <input 
+                                            type="number" 
+                                            :value="getDH(from, to)" 
+                                            @input="updateDH(from, to, $event.target.value)"
+                                            class="w-12 p-1 text-center border rounded focus:ring-1 focus:ring-indigo-500 outline-none text-gray-600"
+                                            min="0"
+                                        >
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div v-if="uniqueTerminals.length === 0" class="text-center text-gray-400 text-sm py-4">
+                            Add trips with terminals to populate this matrix.
+                        </div>
+                    </div>
+                </div>
+
+                <button @click="solve" :disabled="loading" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center">
+                    <svg v-if="loading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    {{ loading ? 'Solving...' : 'Calculate Schedule' }}
+                </button>
+            </div>
+
+            <!-- Right Column: Results -->
+            <div class="lg:col-span-7 space-y-6">
+                <div v-if="result" class="space-y-6 animate-fade-in">
+                    <!-- Summary Card -->
+                    <div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg text-white p-6 flex items-center justify-between">
+                        <div>
+                            <p class="text-indigo-100 text-sm font-medium uppercase tracking-wider">Result</p>
+                            <h3 class="text-3xl font-bold mt-1">Minimum Vehicles Required</h3>
+                        </div>
+                        <div class="text-5xl font-extrabold bg-white/20 px-6 py-3 rounded-lg backdrop-blur-sm">
+                            {{ result.min_vehicles }}
+                        </div>
+                    </div>
+
+                    <!-- Blocks Visualization -->
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-gray-100 bg-gray-50">
+                            <h2 class="font-semibold text-gray-700">Vehicle Blocks</h2>
+                        </div>
+                        <div class="p-6 space-y-8">
+                            <div v-for="(block, bIndex) in result.blocks" :key="bIndex" class="relative">
+                                <div class="absolute left-0 top-0 bottom-0 w-1 bg-indigo-100 rounded-full"></div>
+                                <div class="pl-6">
+                                    <h4 class="text-sm font-bold text-indigo-600 mb-3 uppercase tracking-wide">Vehicle {{ bIndex + 1 }}</h4>
+                                    <div class="flex flex-wrap gap-4">
+                                        <div v-for="(trip, tIndex) in block" :key="trip.id" class="flex items-center">
+                                            <!-- Trip Card -->
+                                            <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow min-w-[180px]">
+                                                <div class="flex justify-between items-center mb-2">
+                                                    <span class="text-xs font-mono text-gray-400">Trip #{{ trip.id }}</span>
+                                                    <span class="text-xs font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                                        {{ formatDuration(trip.dep_time, trip.arr_time) }}m
+                                                    </span>
+                                                </div>
+                                                <div class="flex justify-between items-center text-sm">
+                                                    <div class="text-center">
+                                                        <div class="font-bold text-gray-800 uppercase">{{ trip.dep_term }}</div>
+                                                        <div class="text-xs text-gray-500">{{ formatMinutes(trip.dep_time) }}</div>
+                                                    </div>
+                                                    <div class="text-gray-300">→</div>
+                                                    <div class="text-center">
+                                                        <div class="font-bold text-gray-800 uppercase">{{ trip.arr_term }}</div>
+                                                        <div class="text-xs text-gray-500">{{ formatMinutes(trip.arr_time) }}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <!-- Arrow to next trip -->
+                                            <div v-if="tIndex < block.length - 1" class="mx-2 text-gray-300 flex flex-col items-center">
+                                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                                                <span class="text-[10px] mt-1 text-gray-400">
+                                                    DH: {{ getDH(trip.arr_term, block[tIndex+1].dep_term) }}m
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div v-else class="h-full flex flex-col items-center justify-center text-gray-400 space-y-4 min-h-[400px] border-2 border-dashed border-gray-200 rounded-xl">
+                    <svg class="w-16 h-16 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+                    <p>Enter trips and click Calculate to see the schedule.</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const { createApp, ref, computed } = Vue;
+
+        createApp({
+            setup() {
+                const trips = ref([]);
+                const dhMatrix = ref({});
+                const result = ref(null);
+                const loading = ref(false);
+
+                // Helper to convert HH:MM to minutes
+                const timeToMin = (str) => {
+                    if (!str) return 0;
+                    const [h, m] = str.split(':').map(Number);
+                    return h * 60 + m;
+                };
+
+                // Helper to convert minutes to HH:MM
+                const minToTime = (min) => {
+                    const h = Math.floor(min / 60);
+                    const m = min % 60;
+                    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+                };
+
+                const uniqueTerminals = computed(() => {
+                    const terms = new Set();
+                    trips.value.forEach(t => {
+                        if (t.dep_term) terms.add(t.dep_term);
+                        if (t.arr_term) terms.add(t.arr_term);
+                    });
+                    return Array.from(terms).sort();
+                });
+
+                const getDH = (from, to) => {
+                    if (!dhMatrix.value[from]) return 0;
+                    return dhMatrix.value[from][to] || 0;
+                };
+
+                const updateDH = (from, to, val) => {
+                    if (!dhMatrix.value[from]) dhMatrix.value[from] = {};
+                    dhMatrix.value[from][to] = parseInt(val) || 0;
+                };
+
+                const addTrip = () => {
+                    const id = trips.value.length > 0 ? Math.max(...trips.value.map(t => t.id)) + 1 : 1;
+                    trips.value.push({
+                        id,
+                        dep_term: '',
+                        dep_time_str: '08:00',
+                        arr_term: '',
+                        arr_time_str: '09:00'
+                    });
+                };
+
+                const removeTrip = (index) => {
+                    trips.value.splice(index, 1);
+                };
+
+                const loadExample = () => {
+                    // Example data from the python script
+                    trips.value = [
+                        { id: 1, dep_term: 'a', dep_time_str: '07:00', arr_term: 'b', arr_time_str: '07:25' },
+                        { id: 2, dep_term: 'd', dep_time_str: '07:00', arr_term: 'a', arr_time_str: '07:35' },
+                        { id: 3, dep_term: 'b', dep_time_str: '07:15', arr_term: 'c', arr_time_str: '08:15' },
+                        { id: 4, dep_term: 'c', dep_time_str: '07:30', arr_term: 'd', arr_time_str: '08:35' },
+                        { id: 5, dep_term: 'a', dep_time_str: '07:35', arr_term: 'd', arr_time_str: '08:00' },
+                        { id: 6, dep_term: 'd', dep_time_str: '08:00', arr_term: 'a', arr_time_str: '08:30' },
+                        { id: 7, dep_term: 'a', dep_time_str: '08:35', arr_term: 'd', arr_time_str: '09:05' },
+                        { id: 8, dep_term: 'c', dep_time_str: '09:05', arr_term: 'd', arr_time_str: '10:00' }
+                    ];
+
+                    // Initialize matrix with example data
+                    const exampleDH = {
+                        'a': {'a':0, 'b':15, 'c':30, 'd':25},
+                        'b': {'a':20, 'b':0, 'c':40, 'd':30},
+                        'c': {'a':25, 'b':35, 'c':0, 'd':45},
+                        'd': {'a':20, 'b':25, 'c':35, 'd':0}
+                    };
+                    
+                    // Deep copy to avoid reactivity issues initially
+                    dhMatrix.value = JSON.parse(JSON.stringify(exampleDH));
+                };
+
+                const solve = async () => {
+                    loading.value = true;
+                    try {
+                        const payload = {
+                            trips: trips.value.map(t => ({
+                                id: t.id,
+                                dep_term: t.dep_term,
+                                dep_time: timeToMin(t.dep_time_str),
+                                arr_term: t.arr_term,
+                                arr_time: timeToMin(t.arr_time_str)
+                            })),
+                            dh_matrix: dhMatrix.value
+                        };
+
+                        const response = await fetch('/api/solve', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) throw new Error('Failed to solve');
+                        result.value = await response.json();
+                    } catch (e) {
+                        alert('Error: ' + e.message);
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const formatMinutes = (min) => minToTime(min);
+                
+                const formatDuration = (start, end) => {
+                    return end - start;
+                };
+
+                return {
+                    trips,
+                    dhMatrix,
+                    result,
+                    loading,
+                    uniqueTerminals,
+                    addTrip,
+                    removeTrip,
+                    loadExample,
+                    solve,
+                    getDH,
+                    updateDH,
+                    formatMinutes,
+                    formatDuration
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
