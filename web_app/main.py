@@ -118,7 +118,13 @@ async def read_index():
             status_code=500
         )
 
-# Export app for Vercel (required for serverless functions)
-# Vercel's Python runtime looks for 'handler' or 'app'
-handler = app
+# Export handler for Vercel (required for serverless functions)
+# Try using Mangum adapter for better serverless compatibility
+try:
+    from mangum import Mangum
+    handler = Mangum(app, lifespan="off")
+except ImportError:
+    # Fallback to direct app export if Mangum not available
+    handler = app
+
 __all__ = ['handler', 'app']
