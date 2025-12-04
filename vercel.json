@@ -9,17 +9,16 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "web_app/main.py"
+      "dest": "/web_app/main.py"
     },
     {
       "src": "/(.*)",
-      "dest": "web_app/main.py"
+      "dest": "/web_app/main.py"
     }
   ],
   "functions": {
     "web_app/main.py": {
-      "includeFiles": "web_app/**",
-      "maxDuration": 30
+      "includeFiles": "web_app/**"
     }
   }
 }
