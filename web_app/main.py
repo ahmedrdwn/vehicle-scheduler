@@ -1,12 +1,21 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import os
-from logic import solve_schedule
+import sys
+import traceback
 
-app = FastAPI()
+# Import logic with error handling
+try:
+    from logic import solve_schedule
+except ImportError as e:
+    # Fallback for debugging
+    print(f"Import error: {e}", file=sys.stderr)
+    solve_schedule = None
+
+app = FastAPI(title="Vehicle Scheduler API")
 
 # Add CORS middleware
 app.add_middleware(
@@ -29,14 +38,33 @@ class SolveRequest(BaseModel):
     trips: List[Trip]
     dh_matrix: Dict[str, Dict[str, int]]
 
+@app.get("/api/health")
+async def health():
+    """Health check endpoint"""
+    return JSONResponse(content={
+        "status": "ok",
+        "logic_imported": solve_schedule is not None,
+        "python_version": sys.version
+    })
+
 @app.post("/api/solve")
 async def solve(request: SolveRequest):
     try:
+        if solve_schedule is None:
+            raise HTTPException(status_code=500, detail="Logic module not imported")
         # Convert Pydantic models to dicts for the logic function
         trips_data = [t.dict() for t in request.trips]
         result = solve_schedule(trips_data, request.dh_matrix)
         return result
+    except HTTPException:
+        raise
     except Exception as e:
+        error_details = {
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+        print(f"Error in solve: {error_details}", file=sys.stderr)
         raise HTTPException(status_code=500, detail=str(e))
 
 # Serve static files - handle multiple path scenarios for Vercel
@@ -91,4 +119,6 @@ async def read_index():
         )
 
 # Export app for Vercel (required for serverless functions)
+# Vercel's Python runtime looks for 'handler' or 'app'
 handler = app
+__all__ = ['handler', 'app']
