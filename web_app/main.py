@@ -8,12 +8,23 @@ import sys
 import traceback
 
 # Import logic with error handling
+# Try multiple import paths for Vercel compatibility
 try:
     from logic import solve_schedule
-except ImportError as e:
-    # Fallback for debugging
-    print(f"Import error: {e}", file=sys.stderr)
-    solve_schedule = None
+except ImportError:
+    try:
+        # Try importing from web_app.logic (for Vercel)
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(__file__))
+        from logic import solve_schedule
+    except ImportError as e:
+        # Fallback for debugging
+        print(f"Import error: {e}", file=sys.stderr)
+        print(f"Current directory: {os.getcwd()}", file=sys.stderr)
+        print(f"File location: {__file__}", file=sys.stderr)
+        print(f"Python path: {sys.path}", file=sys.stderr)
+        solve_schedule = None
 
 app = FastAPI(title="Vehicle Scheduler API")
 
@@ -119,12 +130,18 @@ async def read_index():
         )
 
 # Export handler for Vercel (required for serverless functions)
-# Try using Mangum adapter for better serverless compatibility
+# Vercel's Python runtime expects 'handler' to be the ASGI application
+# Using Mangum adapter for proper serverless compatibility
 try:
     from mangum import Mangum
-    handler = Mangum(app, lifespan="off")
-except ImportError:
-    # Fallback to direct app export if Mangum not available
+    # Mangum wraps FastAPI for AWS Lambda/Vercel compatibility
+    handler = Mangum(app, lifespan="off", api_gateway_base_path="/")
+except ImportError as e:
+    # If Mangum is not available, export app directly
+    # This should work but Mangum is more reliable for serverless
+    print(f"Mangum import failed: {e}, using app directly", file=sys.stderr)
     handler = app
 
+# Vercel looks for 'handler' variable
+# Also export app for direct access if needed
 __all__ = ['handler', 'app']

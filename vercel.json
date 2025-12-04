@@ -18,7 +18,8 @@
   ],
   "functions": {
     "web_app/main.py": {
-      "includeFiles": "web_app/**"
+      "includeFiles": "web_app/**",
+      "maxDuration": 30
     }
   }
 }
