@@ -1,12 +1,21 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import os
 from logic import solve_schedule
 
 app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Data models
 class Trip(BaseModel):
@@ -31,17 +40,20 @@ async def solve(request: SolveRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Serve static files
-# We assume the static files are in a 'static' directory next to this file
 static_dir = os.path.join(os.path.dirname(__file__), "static")
-if not os.path.exists(static_dir):
-    os.makedirs(static_dir)
 
-app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def read_index():
-    return FileResponse(os.path.join(static_dir, "index.html"))
+    index_path = os.path.join(static_dir, "index.html")
+    try:
+        if os.path.exists(index_path):
+            with open(index_path, "r", encoding="utf-8") as f:
+                return HTMLResponse(content=f.read())
+        else:
+            # Fallback if file not found
+            return HTMLResponse(content="<h1>Application Error: Static files not found</h1>", status_code=404)
+    except Exception as e:
+        return HTMLResponse(content=f"<h1>Error loading page: {str(e)}</h1>", status_code=500)
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+# Export app for Vercel (required for serverless functions)
+handler = app
